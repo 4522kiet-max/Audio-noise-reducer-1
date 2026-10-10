@@ -28,7 +28,7 @@ FRONTEND_DIR = os.path.join(PROJECT_DIR, "frontend")
 try:
     from fastapi import FastAPI, UploadFile, File, Form, Request, HTTPException
     from fastapi.middleware.cors import CORSMiddleware
-    from fastapi.responses import JSONResponse, FileResponse
+    from fastapi.responses import JSONResponse, FileResponse, HTMLResponse, Response
     from fastapi.staticfiles import StaticFiles
     import uvicorn
     HAS_FASTAPI = True
@@ -333,13 +333,59 @@ if HAS_SCIENTIFIC_STACK:
         except Exception as e:
             return JSONResponse(status_code=500, content={"status": "error", "message": str(e)})
 
-    # Mount static frontend at root URL (registered after API routes)
-    if os.path.isdir(FRONTEND_DIR):
-        app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
-    else:
-        @app.get("/")
-        def root_default():
-            return health_check()
+    # Static Frontend File Resolver (supports local runs, nested folders, and Vercel serverless)
+    def _find_static_file(filename: str):
+        candidates = [
+            os.path.join(BACKEND_DIR, "static", filename),
+            os.path.join(BACKEND_DIR, filename),
+            os.path.join(FRONTEND_DIR, filename),
+            os.path.join(PROJECT_DIR, filename),
+            os.path.join(os.getcwd(), filename),
+            os.path.join(os.getcwd(), "audioj", "frontend", filename)
+        ]
+        for c in candidates:
+            if os.path.isfile(c):
+                return c
+        return None
+
+    @app.get("/")
+    @app.get("/index.html")
+    def serve_index():
+        path = _find_static_file("index.html")
+        if path:
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    return HTMLResponse(content=f.read())
+            except Exception:
+                return FileResponse(path, media_type="text/html")
+        return health_check()
+
+    @app.get("/style.css")
+    def serve_style():
+        path = _find_static_file("style.css")
+        if path:
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    return Response(content=f.read(), media_type="text/css")
+            except Exception:
+                return FileResponse(path, media_type="text/css")
+        raise HTTPException(status_code=404, detail="style.css not found")
+
+    @app.get("/app.js")
+    def serve_app_js():
+        path = _find_static_file("app.js")
+        if path:
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    return Response(content=f.read(), media_type="application/javascript")
+            except Exception:
+                return FileResponse(path, media_type="application/javascript")
+        raise HTTPException(status_code=404, detail="app.js not found")
+
+    for static_dir in [os.path.join(BACKEND_DIR, "static"), FRONTEND_DIR, BACKEND_DIR]:
+        if os.path.isdir(static_dir):
+            app.mount("/static", StaticFiles(directory=static_dir), name="static_dir")
+            break
 
     def run_server():
         print("=" * 75)
