@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Audio Noise Reducer | SVD Rank Reduction Engine</title>
+  <meta name="description"
+    content="Audio noise reduction system using Short-Time Fourier Transform (STFT) and Low-Rank Singular Value Decomposition (SVD).">
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
+    rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+  <!-- Ambient Glow Effects -->
+  <div class="ambient-glow glow-cyan"></div>
+  <div class="ambient-glow glow-emerald"></div>
+  <div class="ambient-glow glow-indigo"></div>
+
+  <!-- Header -->
+  <header class="app-header">
+    <div class="container header-inner">
+      <div class="brand">
+        <div class="brand-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M2 10v4M6 6v12M10 3v18M14 7v10M18 5v14M22 10v4" stroke-linecap="round" />
+          </svg>
+        </div>
+        <div>
+          <div class="brand-title">
+            Audio Noise Reducer
+            <span class="badge-tag">SVD Rank Reduction</span>
+          </div>
+          <p class="brand-subtitle">ABHIYAN Project E4 • Short-Time Fourier Transform & Singular Value Decomposition</p>
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <!-- Backend Connection Indicator (Interactive) -->
+        <span class="status-badge standalone" id="backendBadge"
+          title="Backend Server Status • Click to open connection & diagnostics modal">
+          <span class="live-dot" style="background:#38bdf8; box-shadow:0 0 8px #38bdf8;"></span>
+          <span id="backendBadgeText">Backend: Checking...</span>
+        </span>
+
+        <!-- Backend Settings / Ping Button -->
+        <button class="btn btn-outline" id="pingApiBtn"
+          title="Test connection to Python FastAPI backend & open settings">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+          </svg>
+          Backend API
+        </button>
+
+        <!-- Status Live Badge -->
+        <span class="status-badge live" id="systemStatus">
+          <span class="live-dot"></span>
+          Ready
+        </span>
+
+        <!-- Quick Demo Tone -->
+        <button class="btn btn-primary" id="quickDemoBtn" title="Load synthetic harmonic speech demo">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+            <polygon points="5 3 19 12 5 21 5 3" />
+          </svg>
+          Load Demo
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content Layout -->
+  <main class="container main-layout">
+
+    <!-- Top Configuration Grid (Input + Parameters) -->
+    <section class="grid-two">
+
+      <!-- Card 1: Audio Input -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">
+            <span class="step-num">1</span>
+            Audio Input Source
+          </div>
+          <span class="card-hint">WAV / MP3 / Mic</span>
+        </div>
+
+        <!-- Dropzone -->
+        <div class="dropzone" id="dropzone">
+          <input type="file" id="audioFileInput" accept="audio/*" class="file-input">
+          <div class="dropzone-icon">
+            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12" />
+            </svg>
+          </div>
+          <div class="dropzone-primary">Drag & drop noisy audio file here</div>
+          <div class="dropzone-secondary">or <span class="browse-text">browse from your computer</span></div>
+        </div>
+
+        <!-- Loaded File Info Badge -->
+        <div class="file-badge" id="fileInfoBadge" style="display: none;">
+          <div class="file-name" id="fileName">sample.wav</div>
+          <div class="file-meta" id="fileMeta">44.1 kHz • 2.5s Mono</div>
+        </div>
+
+        <!-- Test Bench Presets & Live Mic -->
+        <div class="presets-section">
+          <span class="presets-label">Test Bench Presets (Quick Evaluation):</span>
+          <div class="preset-pills">
+            <button type="button" class="preset-pill active" id="presetSpeech">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                <line x1="12" y1="19" x2="12" y2="23" />
+                <line x1="8" y1="23" x2="16" y2="23" />
+              </svg>
+              1. Voice + Gaussian Noise
+            </button>
+            <button type="button" class="preset-pill" id="presetHum">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+              </svg>
+              2. 50Hz AC Ground Hum
+            </button>
+            <button type="button" class="preset-pill" id="presetHiss">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10" />
+                <path d="M8 12h8" />
+              </svg>
+              3. Chord + Tape Hiss
+            </button>
+            <button type="button" class="preset-pill mic-btn" id="recordMicBtn">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                <line x1="12" x1="19" x2="12" y2="22" />
+              </svg>
+              <span id="micBtnText">Record 3s Mic</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 2: Mathematical Parameters -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">
+            <span class="step-num">2</span>
+            Mathematical Parameters
+          </div>
+          <span class="card-hint">SVD Subspace Truncation</span>
+        </div>
+
+        <div class="params-stack">
+          <!-- Rank Truncation Slider -->
+          <div class="param-group">
+            <div class="param-head">
+              <label for="rankSlider">Target Subspace Rank (\(k\) Singular Values):</label>
+              <span class="param-val" id="rankValue">12</span>
+            </div>
+            <input type="range" id="rankSlider" min="2" max="64" value="12" class="styled-range">
+            <div class="range-markers">
+              <span>2 (Aggressive Filter)</span>
+              <span>12 (Optimal Speech)</span>
+              <span>64 (Pass-through)</span>
+            </div>
+            <p class="param-desc">Large singular values (\(\sigma_1 \dots \sigma_k\)) contain signal harmonics; trailing
+              values represent uncorrelated noise floor.</p>
+          </div>
+
+          <!-- STFT Window Size Selector -->
+          <div class="param-group">
+            <div class="param-head">
+              <label for="stftWindowSelect">STFT Window Size (\(N_{fft}\)):</label>
+              <span class="param-val" id="windowValue">1024 samples</span>
+            </div>
+            <select id="stftWindowSelect" class="styled-select">
+              <option value="512">512 samples (High Time Resolution)</option>
+              <option value="1024" selected>1024 samples (Balanced Resolution — 43Hz bins)</option>
+              <option value="2048">2048 samples (High Frequency Resolution)</option>
+            </select>
+          </div>
+
+          <!-- Active DSP Engine Indicator -->
+          <div class="active-engine-badge" id="activeEngineBadge"
+            title="Click to view Backend Connection & Engine Settings">
+            <span class="engine-badge-icon">⚡</span>
+            <span>Active DSP: <strong id="activeEngineText">Detecting Engine...</strong></span>
+          </div>
+
+          <!-- Process Button -->
+          <button class="btn btn-primary btn-full" id="processBtn">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+            </svg>
+            Compute SVD & Denoise
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Metrics Summary Banner -->
+    <section class="card metrics-banner" id="metricsBanner">
+      <div class="metric-card">
+        <span class="metric-title">STFT Spectrogram Matrix</span>
+        <span class="metric-value cyan" id="metricMatrixDim">513 × 172</span>
+      </div>
+      <div class="metric-card">
+        <span class="metric-title">Subspace Rank (\(k\))</span>
+        <span class="metric-value emerald" id="metricRank">12 / 64</span>
+      </div>
+      <div class="metric-card">
+        <span class="metric-title">Rank Compression</span>
+        <span class="metric-value amber" id="metricCompression">81.3%</span>
+      </div>
+      <div class="metric-card">
+        <span class="metric-title">Est. SNR Improvement</span>
+        <span class="metric-value emerald" id="metricSNR">+11.4 dB</span>
+      </div>
+    </section>
+
+    <!-- Visualizations Card with Interactive Tabs -->
+    <section class="card visual-card">
+      <div class="tabs-bar">
+        <div class="tabs-nav">
+          <button class="tab-btn active" data-tab="waveforms">Time Waveforms</button>
+          <button class="tab-btn" data-tab="spectrogram">STFT Spectrogram Matrix</button>
+          <button class="tab-btn" data-tab="singularValues">SVD Scree Plot (\(\sigma_i\))</button>
+          <button class="tab-btn" data-tab="mathInspector">Step-by-Step Math Inspector</button>
+          <button class="tab-btn" data-tab="vivaReport">Viva Q&A & Report</button>
+          <button class="tab-btn" data-tab="roadmap">5-Day Roadmap Proofs</button>
+        </div>
+
+        <div class="legend-group">
+          <span class="legend-tag">
+            <span class="legend-dot red"></span> Noisy Original
+          </span>
+          <span class="legend-tag">
+            <span class="legend-dot green"></span> SVD Reconstructed
+          </span>
+        </div>
+      </div>
+
+      <!-- Tab 1: Time Waveforms -->
+      <div class="tab-panel active" id="tab-waveforms">
+        <div class="canvas-box">
+          <canvas id="waveformCanvas" width="1150" height="280"></canvas>
+          <span class="canvas-caption">Amplitude vs Time • Dual Overlay</span>
+        </div>
+      </div>
+
+      <!-- Tab 2: Spectrogram Heatmaps -->
+      <div class="tab-panel" id="tab-spectrogram">
+        <div class="dual-spectrogram">
+          <div class="spectro-column">
+            <h4>Noisy Spectrogram (\(|X_{STFT}|\))</h4>
+            <div class="canvas-box">
+              <canvas id="specNoisyCanvas" width="560" height="270"></canvas>
+            </div>
+          </div>
+          <div class="spectro-column">
+            <h4>Denoised Spectrogram (\(|X_{rank-k}|\))</h4>
+            <div class="canvas-box">
+              <canvas id="specCleanCanvas" width="560" height="270"></canvas>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab 3: Scree Plot -->
+      <div class="tab-panel" id="tab-singularValues">
+        <div class="canvas-box">
+          <canvas id="svdChartCanvas" width="1150" height="280"></canvas>
+          <span class="canvas-caption">Singular Value Spectrum (\(\sigma_i\)) vs Index (\(i\)) • Scree Plot</span>
+        </div>
+      </div>
+
+      <!-- Tab 4: Step-by-Step Mathematical Calculation Engine -->
+      <div class="tab-panel" id="tab-mathInspector">
+        <div id="inspectorContent">
+          <!-- Populated dynamically by app.js -->
+        </div>
+      </div>
+
+      <!-- Tab 5: Viva Defense & Academic Report -->
+      <div class="tab-panel" id="tab-vivaReport">
+        <div class="viva-list">
+          <div class="viva-card">
+            <div class="viva-question">
+              <span>Q1.</span> What is the mathematical formulation of SVD on an audio signal?
+            </div>
+            <div class="viva-answer">
+              A 1D audio sequence \(x[n]\) is first converted into a 2D time-frequency matrix \(X \in \mathbb{C}^{M
+              \times N}\) via the Short-Time Fourier Transform (STFT). Singular Value Decomposition factors its
+              magnitude matrix into \(S = U \Sigma V^T\), where \(U\) contains orthogonal frequency basis vectors,
+              \(\Sigma\) contains ordered singular values (\(\sigma_1 \ge \sigma_2 \ge \dots \ge \sigma_p \ge 0\)), and
+              \(V^T\) contains temporal envelopes across frames.
+            </div>
+          </div>
+
+          <div class="viva-card">
+            <div class="viva-question">
+              <span>Q2.</span> Why do large singular values correspond to signal while small ones correspond to noise?
+            </div>
+            <div class="viva-answer">
+              Coherent acoustic signals (voice formants, musical tones) possess strong spectral correlations across
+              frequencies and frames, which concentrate predominantly into the first few singular vectors associated
+              with large singular values \(\sigma_1 \dots \sigma_k\). In contrast, uncorrelated white noise is dispersed
+              uniformly across all basis directions, forming a flat noise floor of small singular values \(\sigma_{k+1}
+              \dots \sigma_p\).
+            </div>
+          </div>
+
+          <div class="viva-card">
+            <div class="viva-question">
+              <span>Q3.</span> State the Eckart–Young–Mirsky Theorem and its significance.
+            </div>
+            <div class="viva-answer">
+              The Eckart–Young–Mirsky theorem proves that the truncated matrix \(S_k = \sum_{i=1}^k \sigma_i u_i v_i^T\)
+              is the unique rank-\(k\) matrix that minimizes reconstruction error: \(\min_{\text{rank}(B) \le k} \|S -
+              B\|_F = \|S - S_k\|_F = \sqrt{\sum_{i=k+1}^p \sigma_i^2}\). This mathematically guarantees that zeroing
+              trailing singular values discards noise while minimizing voice distortion.
+            </div>
+          </div>
+
+          <div class="viva-card">
+            <div class="viva-question">
+              <span>Q4.</span> How does the system synthesize the audio back to the time domain?
+            </div>
+            <div class="viva-answer">
+              The cleaned low-rank magnitude matrix \(S_k\) is recombined with the original complex phase matrix \(\Phi
+              = \angle X\) to form \(\hat{X} = S_k \odot e^{j \Phi}\). The Inverse Short-Time Fourier Transform (ISTFT)
+              is applied to each frame, and synthesis window Overlap-Add (OLA) normalizes the overlapping sections to
+              output the 1D clean audio wave \(\hat{x}[n]\).
+            </div>
+          </div>
+
+          <div class="viva-card">
+            <div class="viva-question">
+              <span>Q5.</span> How does the frontend communicate with the backend?
+            </div>
+            <div class="viva-answer">
+              The frontend communicates with a Python FastAPI server via REST API (<code>POST /api/denoise-svd</code>)
+              sending the audio data, rank \(k\), and window size. When the backend is offline, the frontend seamlessly
+              executes its built-in browser mathematical calculation engine, ensuring guaranteed uptime during live
+              demonstrations.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab 6: 5-Day Roadmap Proofs -->
+      <div class="tab-panel" id="tab-roadmap">
+        <div class="roadmap-grid">
+          <div class="roadmap-col">
+            <div class="roadmap-day">DAY 1</div>
+            <div class="roadmap-title">SETUP</div>
+            <div class="roadmap-desc">Deconstruct problem statement, formulate mathematical SVD model, establish Hann
+              window & STFT matrix dimensions.</div>
+          </div>
+          <div class="roadmap-col">
+            <div class="roadmap-day">DAY 2</div>
+            <div class="roadmap-title">AI VIBE CODE</div>
+            <div class="roadmap-desc">Construct core calculation engine MVP, implement Radix-2 FFT/IFFT, and synthetic
+              test generator with calibrated noise.</div>
+          </div>
+          <div class="roadmap-col">
+            <div class="roadmap-day">DAY 3</div>
+            <div class="roadmap-title">CUSTOMISE</div>
+            <div class="roadmap-desc">Audit mathematical bounds, build dual canvas waveforms, dual spectrogram heatmaps,
+              and interactive Scree plot with cutoff slider.</div>
+          </div>
+          <div class="roadmap-col">
+            <div class="roadmap-day">DAY 4</div>
+            <div class="roadmap-title">DOCUMENT</div>
+            <div class="roadmap-desc">Write complete 17-section academic project report, calculate SNR gain metrics, and
+              capture proof screenshots.</div>
+          </div>
+          <div class="roadmap-col">
+            <div class="roadmap-day">DAY 5</div>
+            <div class="roadmap-title">DEMO</div>
+            <div class="roadmap-desc">Author 10-slide presentation deck, rehearse 5-minute speaking script, master
+              evaluator viva questions, and test WAV exporter.</div>
+          </div>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- Audio Player Dock -->
+    <section class="card player-dock">
+      <div class="player-grid">
+
+        <!-- Original Audio Player -->
+        <div class="player-card">
+          <div class="player-header">
+            <span class="player-label">
+              <span class="legend-dot red"></span>
+              Original Audio (Signal + Noise)
+            </span>
+          </div>
+
+          <div class="player-controls">
+            <button class="btn-play" id="playOriginalBtn" title="Play/Pause Original Audio">
+              <svg viewBox="0 0 24 24" fill="currentColor">
+                <polygon points="5 3 19 12 5 21 5 3" />
+              </svg>
+            </button>
+
+            <div class="track-container">
+              <div class="track-bar" id="originalTrackBar">
+                <div class="track-fill" id="originalTrackFill"></div>
+              </div>
+              <div class="track-timer">
+                <span id="originalTimeElapsed">0:00</span>
+                <span id="originalTimeDuration">2.5s</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Clean Reconstructed Player -->
+        <div class="player-card active-clean">
+          <div class="player-header">
+            <span class="player-label">
+              <span class="legend-dot green"></span>
+              Denoised Audio (SVD Rank-\(k\) Reconstruction)
+            </span>
+            <!-- Download WAV Button -->
+            <button class="btn btn-outline" id="downloadWavBtn" title="Export Clean Audio as 16-bit PCM WAV">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
+              </svg>
+              Download WAV
+            </button>
+          </div>
+
+          <div class="player-controls">
+            <button class="btn-play green" id="playCleanBtn" title="Play/Pause Denoised Audio">
+              <svg viewBox="0 0 24 24" fill="currentColor">
+                <polygon points="5 3 19 12 5 21 5 3" />
+              </svg>
+            </button>
+
+            <div class="track-container">
+              <div class="track-bar" id="cleanTrackBar">
+                <div class="track-fill green" id="cleanTrackFill"></div>
+              </div>
+              <div class="track-timer">
+                <span id="cleanTimeElapsed">0:00</span>
+                <span id="cleanTimeDuration">2.5s</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Footer -->
+  <footer class="app-footer">
+    <div class="container footer-inner">
+      <span>Audio Noise Reducer (E4) • ABHIYAN Mini Project Programme Demonstration</span>
+      <div class="footer-badges">
+        <span class="footer-badge">STFT</span>
+        <span class="footer-badge">SVD</span>
+        <span class="footer-badge">Eckart-Young Theorem</span>
+        <span class="footer-badge">Web Audio API</span>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Backend Connection & Diagnostics Modal -->
+  <div class="modal-backdrop" id="backendModal" style="display: none;">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-title">
+          <div class="modal-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="2" y="2" width="20" height="8" rx="2" ry="2" />
+              <rect x="2" y="14" width="20" height="8" rx="2" ry="2" />
+              <line x1="6" y1="6" x2="6.01" y2="6" />
+              <line x1="6" y1="18" x2="6.01" y2="18" />
+            </svg>
+          </div>
+          <div>
+            <h3>Python Backend Engine Connection</h3>
+            <p>FastAPI • NumPy SVD Matrix Decomposition • SciPy STFT/ISTFT</p>
+          </div>
+        </div>
+        <button class="modal-close-btn" id="closeBackendModalBtn" aria-label="Close modal">&times;</button>
+      </div>
+
+      <div class="modal-body">
+        <!-- Live Status Bar -->
+        <div class="server-status-banner online" id="modalServerStatusBanner">
+          <div class="status-banner-left">
+            <span class="status-dot-large online" id="modalStatusDot"></span>
+            <div>
+              <div class="status-banner-title" id="modalStatusTitle">Backend: Online (Scientific Mode)</div>
+              <div class="status-banner-subtitle" id="modalStatusSubtitle">http://127.0.0.1:8000</div>
+            </div>
+          </div>
+          <button class="btn btn-outline btn-sm" id="modalPingBtn">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+            </svg>
+            Test Ping
+          </button>
+        </div>
+
+        <!-- Engine Mode Selection -->
+        <div class="form-group-section">
+          <label class="section-label">Computation Engine Mode:</label>
+          <div class="engine-options">
+            <label class="engine-option-card active" id="engineOptionBackend">
+              <input type="radio" name="dspEngine" value="backend" id="radioBackend" checked>
+              <div class="engine-option-info">
+                <span class="engine-title">Python Backend (FastAPI + SciPy SVD)</span>
+                <span class="engine-desc">64-bit IEEE float scientific linear algebra, NumPy LAPACK SVD, exact STFT
+                  matrix.</span>
+                <span class="engine-tag recommended">High Precision • Recommended</span>
+              </div>
+            </label>
+            <label class="engine-option-card" id="engineOptionBrowser">
+              <input type="radio" name="dspEngine" value="browser" id="radioBrowser">
+              <div class="engine-option-info">
+                <span class="engine-title">Standalone Browser Engine (JavaScript Web Audio)</span>
+                <span class="engine-desc">Client-side Radix-2 FFT with in-memory low-rank spectral gating (zero external
+                  server).</span>
+                <span class="engine-tag">Fallback Mode</span>
+              </div>
+            </label>
+          </div>
+        </div>
+
+        <!-- Connection Configuration -->
+        <div class="form-group-section">
+          <label class="section-label" for="backendUrlInput">Backend API URL:</label>
+          <div class="url-input-group">
+            <input type="text" id="backendUrlInput" value="http://127.0.0.1:8000" class="styled-input"
+              placeholder="http://127.0.0.1:8000">
+            <button class="btn btn-outline" id="saveBackendUrlBtn">Update URL</button>
+          </div>
+        </div>
+
+        <!-- Diagnostics & Hardware Telemetry -->
+        <div class="diagnostics-box" id="backendDiagnosticsBox">
+          <div class="diag-title">Backend Diagnostics & Capabilities:</div>
+          <div class="diag-grid">
+            <div class="diag-item"><span class="diag-key">REST Service:</span> <span class="diag-val"
+                id="diagService">Audio Noise Reducer (SVD)</span></div>
+            <div class="diag-item"><span class="diag-key">DSP Acceleration:</span> <span class="diag-val"
+                id="diagEngine">Detecting...</span></div>
+            <div class="diag-item"><span class="diag-key">NumPy Version:</span> <span class="diag-val"
+                id="diagNumPy">-</span></div>
+            <div class="diag-item"><span class="diag-key">SciPy Version:</span> <span class="diag-val"
+                id="diagSciPy">-</span></div>
+            <div class="diag-item"><span class="diag-key">Response Latency:</span> <span class="diag-val"
+                id="diagLatency">-</span></div>
+            <div class="diag-item"><span class="diag-key">CORS Status:</span> <span class="diag-val emerald">Active
+                (Allow-Origin: *)</span></div>
+          </div>
+        </div>
+
+        <!-- Launch Helper Box -->
+        <div class="launch-helper-box">
+          <div class="launch-helper-header">
+            <span>Terminal Startup Command</span>
+            <button class="copy-cmd-btn" id="copyCmdBtn" title="Copy command">Copy</button>
+          </div>
+          <code>python backend/server.py</code>
+          <p class="launch-hint">Or double-click <strong>run_app.bat</strong> in the root folder to start both the
+            Python backend and browser automatically.</p>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn btn-outline" id="closeBackendModalFooterBtn">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <script src="app.js"></script>
+</body>
+
+</html>
