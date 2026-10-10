@@ -24,18 +24,46 @@ BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_DIR = os.path.dirname(BACKEND_DIR)
 FRONTEND_DIR = os.path.join(PROJECT_DIR, "frontend")
 
-# Verify availability of Python scientific ecosystem
-HAS_SCIENTIFIC_STACK = False
+# Verify availability of Python ecosystem
 try:
-    import numpy as np
-    from scipy import signal
-    import soundfile as sf
     from fastapi import FastAPI, UploadFile, File, Form, Request, HTTPException
     from fastapi.middleware.cors import CORSMiddleware
     from fastapi.responses import JSONResponse, FileResponse
     from fastapi.staticfiles import StaticFiles
     import uvicorn
-    HAS_SCIENTIFIC_STACK = True
+    HAS_FASTAPI = True
+except ImportError:
+    HAS_FASTAPI = False
+    class FastAPI:
+        def __init__(self, *args, **kwargs): pass
+        def add_middleware(self, *args, **kwargs): pass
+        def get(self, *args, **kwargs): return lambda f: f
+        def post(self, *args, **kwargs): return lambda f: f
+        def mount(self, *args, **kwargs): pass
+
+# Explicit top-level FastAPI instance (required by Vercel deployment parser)
+app = FastAPI(
+    title="Audio Noise Reducer - Mathematical DSP Engine",
+    description="Scientific audio noise reduction engine implementing SVD, Spectral Subtraction, and Wiener MMSE filtering.",
+    version="2.5.0"
+)
+
+# Permissive CORS configuration to support file://, localhost, and 127.0.0.1
+if HAS_FASTAPI:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=False,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+HAS_SCIENTIFIC_STACK = False
+try:
+    import numpy as np
+    from scipy import signal
+    import soundfile as sf
+    HAS_SCIENTIFIC_STACK = HAS_FASTAPI
 except ImportError:
     HAS_SCIENTIFIC_STACK = False
 
@@ -44,20 +72,6 @@ except ImportError:
 # MODE 1: Scientific Hardware Acceleration (FastAPI + NumPy + SciPy)
 # =====================================================================
 if HAS_SCIENTIFIC_STACK:
-    app = FastAPI(
-        title="Audio Noise Reducer - Mathematical DSP Engine",
-        description="Scientific audio noise reduction engine implementing SVD, Spectral Subtraction, and Wiener MMSE filtering.",
-        version="2.5.0"
-    )
-
-    # Permissive CORS configuration to support file://, localhost, and 127.0.0.1
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=["*"],
-        allow_credentials=False,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
 
     def downsample_spectrogram(mat, target_f=45, target_t=70):
         """Downsamples 2D spectrogram magnitude matrix for fast, high-contrast UI heatmap rendering."""
